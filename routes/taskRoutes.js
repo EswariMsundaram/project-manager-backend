@@ -77,30 +77,49 @@ TaskRouter.post('/:projectId/tasks',async(req,res)=>{
 
 })
 
+//Helper function for PUT and DELETE
+async function verifyTaskOwnership(taskId, userId){
+    const task=await Task.findById(taskId)
+    if(!task)return {error:"Task not found"}
+
+    //find parent project
+    const project=await Project.findById(task.project)
+    if(!project) return {error:"Parent project not found"}
+
+    if(project.user.toString()!==userId.toString()){
+        return{error:"Not authorized"}
+    }
+    return{task,project}
+}
+
 /**
- * PUT/api/projects/projectId
+ * PUT /tasks/:taskId
  */
-TaskRouter.put('/:projectId',async(req,res)=>{
+TaskRouter.put('/tasks/:taskId',async(req,res)=>{
     try{
-        const updateProject=await Project.findById(req.params.projectId,req.body,{new:true})
-        res.json(project)
+        const {taskId}=req.params
+        const {error}=await verifyTaskOwnership(taskId, req.user._id)
+        if(error) return res.status(error==="Not authorized" ? 403 : 404).json({message:error})
+
+        const updateTask=await Task.findByIdAndUpdate(taskId,req.body,{new:true})
+        res.json(updateTask)
     }catch(error){
         res.status(500).json({error:error.message})
     }
 })
 
 /**
- * DELETE/api/projects/projectId
+ * DELETE/tasks/:taskId
  */
-TaskRouter.delete('/:projectId',async(req,res)=>{
+TaskRouter.delete('/tasks/:taskId',async(req,res)=>{
    try{
-    const updateProject=await Project.findById(req.params.projectId)
+        const {taskId}=req.params
+        const {error}=await verifyTaskOwnership(taskId, req.user._id)
+        if(error) return res.status(error==="Not authorized" ? 403 : 404).json({message:error})
 
-    if(req.user._id!==updateProject.user.toString()){
-        return res.status(403).json({message:"User is not authorized to update this project"})
-        res.json({message:"Project deleted"})
-    }
-    const project=await Project.findByIdAndDelete(req.params.projectId)
+        await Task.findByIdAndDelete(taskId)
+        res.json({message:"Task deleted successfully"})
+    
    }catch(error){
     res.status(500).json({error:error.message})
    }
